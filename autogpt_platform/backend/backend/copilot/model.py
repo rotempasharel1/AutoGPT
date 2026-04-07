@@ -78,7 +78,6 @@ class ChatMessage(BaseModel):
             refusal=prisma_message.refusal,
             tool_calls=_parse_json_field(prisma_message.toolCalls),
             function_call=_parse_json_field(prisma_message.functionCall),
-            duration_ms=prisma_message.durationMs,
         )
 
 
@@ -623,6 +622,7 @@ async def _save_session_to_db(
         for msg in new_messages:
             messages_data.append(
                 {
+                    "id": msg.id,
                     "role": msg.role,
                     "content": msg.content,
                     "name": msg.name,
@@ -631,7 +631,7 @@ async def _save_session_to_db(
                     "tool_calls": msg.tool_calls,
                     "function_call": msg.function_call,
                 }
-            )
+        )
         logger.info(
             f"Saving {len(new_messages)} new messages to DB for session {session.session_id}: "
             f"roles={[m['role'] for m in messages_data]}, "
