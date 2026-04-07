@@ -1006,7 +1006,11 @@ def _dispatch_response(
     if isinstance(response, StreamTextDelta):
         delta = response.delta or ""
         if acc.has_tool_results and acc.has_appended_assistant:
-            acc.assistant_response = ChatMessage(role="assistant", content=delta)
+            acc.assistant_response = ChatMessage(
+                id=ctx.message_id,
+                role="assistant",
+                content=delta,
+                )
             acc.accumulated_tool_calls = []
             acc.has_appended_assistant = False
             acc.has_tool_results = False
@@ -1208,8 +1212,12 @@ async def _run_stream_attempt(
         function up to `_MAX_STREAM_ATTEMPTS` times with reduced context.
     """
     acc = _StreamAccumulator(
-        assistant_response=ChatMessage(role="assistant", content=""),
-        accumulated_tool_calls=[],
+        assistant_response=ChatMessage(
+            id=ctx.message_id,
+            role="assistant",
+            content="",
+        ),
+    accumulated_tool_calls=[],
     )
     ended_with_stream_error = False
     # Stores the error message used by _append_error_marker so the outer
