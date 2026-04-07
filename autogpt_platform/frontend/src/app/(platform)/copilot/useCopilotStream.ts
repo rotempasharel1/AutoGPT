@@ -352,7 +352,16 @@ export function useCopilotStream({
     };
   }, [refetchSession, setMessages, resumeStream]);
 
-// Hydrate messages from REST API when not actively streaming
+  // Hydrate messages from REST API when not actively streaming
+  useEffect(() => {
+    if (!hydratedMessages || hydratedMessages.length === 0) return;
+    if (status === "streaming" || status === "submitted") return;
+    if (isReconnectScheduled) return;
+    setMessages((prev) => {
+      if (prev.length >= hydratedMessages.length) return prev;
+      return deduplicateMessages(hydratedMessages);
+    });
+  }, [hydratedMessages, setMessages, status, isReconnectScheduled]);
 
   // Track resume state per session
   const hasResumedRef = useRef<Map<string, boolean>>(new Map());
