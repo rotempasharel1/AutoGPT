@@ -144,8 +144,8 @@ async def add_chat_message(
         "role": role,
         "sequence": sequence,
     }
-    if msg.get("id") is not None:
-        data["id"] = msg["id"]
+    if message_id is not None:
+        data["id"] = message_id
         
 
     # Add optional string fields — sanitize to strip PostgreSQL-incompatible
@@ -217,6 +217,8 @@ async def add_chat_messages_batch(
                         "sequence": start_sequence + i,
                         "createdAt": now,
                     }
+                    if msg.get("id") is not None:
+                        data["id"] = msg["id"]
 
                     # Add optional string fields — sanitize to strip
                     # PostgreSQL-incompatible control characters.
