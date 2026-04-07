@@ -12,6 +12,7 @@ async def test_batch_insert_preserves_explicit_message_id():
     session_id = "test-session-id-stable-message"
     user_id = "test-user-id"
     message_id = "test-message-id-123"
+    duration_ms = 321
 
     await create_chat_session(session_id=session_id, user_id=user_id)
 
@@ -22,6 +23,7 @@ async def test_batch_insert_preserves_explicit_message_id():
                 "id": message_id,
                 "role": "assistant",
                 "content": "hello from assistant",
+                "duration_ms": duration_ms,
             }
         ],
         start_sequence=0,
@@ -35,3 +37,4 @@ async def test_batch_insert_preserves_explicit_message_id():
     assert session.messages[0].role == "assistant"
     assert session.messages[0].content == "hello from assistant"
     assert session.messages[0].id == message_id
+    assert session.messages[0].duration_ms == duration_ms
