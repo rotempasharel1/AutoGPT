@@ -227,7 +227,9 @@ export function useCopilotStream({
       if (isUserStoppingRef.current) return;
       const isNetworkError =
         error.name === "TypeError" || error.name === "AbortError";
-      const isTransientApiError = errorDetail.includes("connection interrupted");
+      const isTransientApiError = errorDetail.includes(
+        "connection interrupted",
+      );
       if (isNetworkError || isTransientApiError) {
         handleReconnect(sessionId);
       }
@@ -235,7 +237,10 @@ export function useCopilotStream({
   });
 
   // Deduplicate messages continuously to prevent duplicates when resuming streams
-  const messages = useMemo(() => deduplicateMessages(rawMessages), [rawMessages]);
+  const messages = useMemo(
+    () => deduplicateMessages(rawMessages),
+    [rawMessages],
+  );
 
   // Wrap AI SDK's stop() to also cancel the backend executor task.
   // sdkStop() aborts the SSE fetch instantly (UI feedback), then we fire
