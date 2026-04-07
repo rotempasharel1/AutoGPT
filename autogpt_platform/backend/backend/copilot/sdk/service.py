@@ -1010,7 +1010,7 @@ def _dispatch_response(
                 id=ctx.message_id,
                 role="assistant",
                 content=delta,
-                )
+            )
             acc.accumulated_tool_calls = []
             acc.has_appended_assistant = False
             acc.has_tool_results = False
@@ -1217,7 +1217,7 @@ async def _run_stream_attempt(
             role="assistant",
             content="",
         ),
-    accumulated_tool_calls=[],
+        accumulated_tool_calls=[],
     )
     ended_with_stream_error = False
     # Stores the error message used by _append_error_marker so the outer

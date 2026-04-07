@@ -78,6 +78,7 @@ class ChatMessage(BaseModel):
             refusal=prisma_message.refusal,
             tool_calls=_parse_json_field(prisma_message.toolCalls),
             function_call=_parse_json_field(prisma_message.functionCall),
+            duration_ms=prisma_message.durationMs,
         )
 
 
