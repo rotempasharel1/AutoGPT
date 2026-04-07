@@ -146,7 +146,6 @@ async def add_chat_message(
     }
     if message_id is not None:
         data["id"] = message_id
-        
 
     # Add optional string fields — sanitize to strip PostgreSQL-incompatible
     # control characters (null bytes etc.) that may appear in tool outputs.

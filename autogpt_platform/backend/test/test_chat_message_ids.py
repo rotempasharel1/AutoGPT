@@ -1,6 +1,10 @@
 import pytest
 
-from backend.copilot.db import create_chat_session, add_chat_messages_batch, get_chat_session
+from backend.copilot.db import (
+    add_chat_messages_batch,
+    create_chat_session,
+    get_chat_session,
+)
 
 
 @pytest.mark.asyncio
