@@ -69,6 +69,7 @@ class ChatMessage(BaseModel):
 
     @staticmethod
     def from_db(prisma_message: PrismaChatMessage) -> "ChatMessage":
+        """Convert a Prisma ChatMessage to a Pydantic ChatMessage."""
         return ChatMessage(
             id=prisma_message.id,
             role=prisma_message.role,
@@ -632,7 +633,7 @@ async def _save_session_to_db(
                     "tool_calls": msg.tool_calls,
                     "function_call": msg.function_call,
                 }
-        )
+            )
         logger.info(
             f"Saving {len(new_messages)} new messages to DB for session {session.session_id}: "
             f"roles={[m['role'] for m in messages_data]}, "
