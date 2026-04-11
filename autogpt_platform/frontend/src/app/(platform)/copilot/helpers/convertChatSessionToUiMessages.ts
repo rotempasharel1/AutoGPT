@@ -196,7 +196,7 @@ export function convertChatSessionMessagesToUiMessages(
   const uiMessages: UIMessage<unknown, UIDataTypes, UITools>[] = [];
   const durations = new Map<string, number>();
 
-  messages.forEach((msg) => {
+  messages.forEach((msg, index) => {
     if (msg.role === "tool") return;
     if (msg.role !== "user" && msg.role !== "assistant") return;
 
