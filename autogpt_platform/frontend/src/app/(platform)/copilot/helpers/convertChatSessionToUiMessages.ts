@@ -274,8 +274,7 @@ export function convertChatSessionMessagesToUiMessages(
       return;
     }
 
-    const msgId = msg.id ?? `${sessionId}-${index}`;
-
+    const msgId = msg.id ?? `${sessionId}-seq-${msg.sequence}`;
     uiMessages.push({
       id: msgId,
       role: msg.role,
