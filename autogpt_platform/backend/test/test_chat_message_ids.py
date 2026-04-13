@@ -6,6 +6,9 @@ from backend.copilot.db import (
     get_chat_session,
 )
 
+@pytest.mark.asyncio
+async def test_batch_insert_preserves_explicit_message_id():
+    """Verify batch insertion preserves an explicit message ID."""
 
 @pytest.mark.asyncio
 async def test_batch_insert_preserves_explicit_message_id():
