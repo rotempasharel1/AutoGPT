@@ -11,7 +11,7 @@ import sys
 import time
 import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 if TYPE_CHECKING:
@@ -1006,16 +1006,10 @@ def _dispatch_response(
     if isinstance(response, StreamTextDelta):
         delta = response.delta or ""
         if acc.has_tool_results and acc.has_appended_assistant:
-            acc.assistant_response = ChatMessage(
-                id=ctx.message_id,
-                role="assistant",
-                content=delta,
-            )
-            acc.accumulated_tool_calls = []
-            acc.has_appended_assistant = False
+            acc.assistant_response.content = (
+                acc.assistant_response.content or ""
+            ) + delta
             acc.has_tool_results = False
-            ctx.session.messages.append(acc.assistant_response)
-            acc.has_appended_assistant = True
         else:
             acc.assistant_response.content = (
                 acc.assistant_response.content or ""
@@ -2081,6 +2075,14 @@ async def stream_chat_completion_sdk(
         )
 
         for attempt in range(_MAX_STREAM_ATTEMPTS):
+            current_message_id = (
+                message_id if attempt == 0 else str(uuid.uuid4())
+            )
+            stream_ctx = replace(stream_ctx, message_id=current_message_id)
+            state.adapter = SDKResponseAdapter(
+                message_id=current_message_id,
+                session_id=session_id,
+            )
             # Clear any stale stash signal from the previous attempt so
             # wait_for_stash() doesn't fire prematurely on a leftover event.
             reset_stash_event()
@@ -2127,9 +2129,6 @@ async def stream_chat_completion_sdk(
                 )
                 if attachments.hint:
                     state.query_message = f"{state.query_message}\n\n{attachments.hint}"
-                state.adapter = SDKResponseAdapter(
-                    message_id=message_id, session_id=session_id
-                )
                 # Reset token accumulators so a failed attempt's partial
                 # usage is not double-counted in the successful attempt.
                 state.usage.reset()
