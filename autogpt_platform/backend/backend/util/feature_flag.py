@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import os
+import uuid
 from enum import Enum
 from functools import wraps
 from typing import Any, Awaitable, Callable, TypeVar
@@ -43,6 +44,9 @@ class Flag(str, Enum):
     COPILOT_SDK = "copilot-sdk"
     COPILOT_DAILY_TOKEN_LIMIT = "copilot-daily-token-limit"
     COPILOT_WEEKLY_TOKEN_LIMIT = "copilot-weekly-token-limit"
+    STRIPE_PRICE_PRO = "stripe-price-id-pro"
+    STRIPE_PRICE_BUSINESS = "stripe-price-id-business"
+    GRAPHITI_MEMORY = "graphiti-memory"
 
 
 def is_configured() -> bool:
@@ -97,6 +101,12 @@ async def _fetch_user_context_data(user_id: str) -> Context:
         LaunchDarkly Context object
     """
     builder = Context.builder(user_id).kind("user").anonymous(True)
+
+    try:
+        uuid.UUID(user_id)
+    except ValueError:
+        # Non-UUID key (e.g. "system") — skip Supabase lookup, return anonymous context.
+        return builder.build()
 
     try:
         from backend.util.clients import get_supabase
