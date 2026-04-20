@@ -297,11 +297,11 @@ export function convertChatSessionMessagesToUiMessages(
       return;
     }
 
-const msgId =
-  msg.id ??
-  (msg.sequence != null
-    ? `${sessionId}-seq-${msg.sequence}`
-    : `${sessionId}-idx-${idx}`);
+    const msgId =
+      msg.id ??
+      (msg.sequence != null
+        ? `${sessionId}-seq-${msg.sequence}`
+        : `${sessionId}-idx-${idx}`);
     uiMessages.push({
       id: msgId,
       role: uiRole,
