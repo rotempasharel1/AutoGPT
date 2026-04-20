@@ -815,21 +815,18 @@ def _next_transient_backoff(
 async def _do_transient_backoff(
     backoff: int,
     state: _RetryState,
-    message_id: str,
-    session_id: str,
 ) -> AsyncIterator[StreamStatus]:
     """Emit a retry notification, sleep, and reset the SDK adapter.
 
     Yields a single :class:`StreamStatus` so the caller can forward it to
-    the client, then sleeps for *backoff* seconds and resets ``state.adapter``
-    and ``state.usage`` so the next attempt starts clean.
+    the client, then sleeps for *backoff* seconds and resets ``state.usage``
+    so the next attempt starts clean.
 
     Extracted from both exception handlers in the retry loop to remove
     near-identical code duplication.
     """
     yield StreamStatus(message=f"Connection interrupted, retrying in {backoff}s…")
     await asyncio.sleep(backoff)
-    state.adapter = SDKResponseAdapter(message_id=message_id, session_id=session_id)
     state.usage.reset()
 
 
@@ -2320,15 +2317,6 @@ async def _run_stream_attempt(
             # Subsequent StreamTextDelta dispatches accumulate content into
             # acc.assistant_response in-place (ChatMessage is mutable), so
             # the DB record is updated without a second append.
-            if (
-                acc.has_tool_results
-                and acc.has_appended_assistant
-                and any(isinstance(r, StreamTextDelta) for r in adapter_responses)
-            ):
-                acc.assistant_response = ChatMessage(role="assistant", content="")
-                acc.accumulated_tool_calls = []
-                acc.has_tool_results = False
-                ctx.session.messages.append(acc.assistant_response)
                 # acc.has_appended_assistant stays True — placeholder is live
 
             # When StreamFinish is in this batch (ResultMessage), flush any
@@ -3354,10 +3342,8 @@ async def stream_chat_completion_sdk(
         )
         attempt = 0
         _last_reset_attempt = -1
+        current_message_id = message_id
         while attempt < _MAX_STREAM_ATTEMPTS:
-            current_message_id = (
-                message_id if attempt == 0 else str(uuid.uuid4())
-            )
             stream_ctx = replace(stream_ctx, message_id=current_message_id)
             state.adapter = SDKResponseAdapter(
                 message_id=current_message_id,
@@ -3456,15 +3442,13 @@ async def stream_chat_completion_sdk(
                 )
                 if attachments.hint:
                     state.query_message = f"{state.query_message}\n\n{attachments.hint}"
-                        # warm_ctx is already baked into current_message via
-        # inject_user_context - no separate injection needed.
-        state.adapter = SDKResponseAdapter(
-            message_id=message_id, session_id=session_id
-        )
 
-        # Reset token accumulators so a failed attempt's partial
-        # usage is not double-counted in the successful attempt.
-        state.usage.reset()
+            # warm_ctx is already baked into current_message via
+            # inject_user_context - no separate injection needed.
+
+            # Reset token accumulators so a failed attempt's partial
+            # usage is not double-counted in the successful attempt.
+            state.usage.reset()
 
             pre_attempt_msg_count = len(session.messages)
             # Snapshot transcript builder state — it maintains an
@@ -3526,10 +3510,9 @@ async def stream_chat_completion_sdk(
                             transient_retries,
                             max_transient_retries,
                         )
-                        async for evt in _do_transient_backoff(
-                            backoff, state, message_id, session_id
-                        ):
+                        async for evt in _do_transient_backoff(backoff, state):
                             yield evt
+                        current_message_id = str(uuid.uuid4())
                         continue  # retry the same context-level attempt
                 logger.warning(
                     "%s Stream error handled in attempt "
@@ -3610,10 +3593,9 @@ async def stream_chat_completion_sdk(
                             transient_retries,
                             max_transient_retries,
                         )
-                        async for evt in _do_transient_backoff(
-                            backoff, state, message_id, session_id
-                        ):
+                        async for evt in _do_transient_backoff(backoff, state):
                             yield evt
+                        current_message_id = str(uuid.uuid4())
                         continue  # retry same context-level attempt
                     # Retries exhausted — persist retryable marker so the
                     # frontend shows "Try again" after refresh.
@@ -3634,6 +3616,7 @@ async def stream_chat_completion_sdk(
                     ended_with_stream_error = True
                     break
                 attempt += 1  # advance to next context-level attempt
+                current_message_id = str(uuid.uuid4())
                 continue
         else:
             # while condition became False — all attempts exhausted without

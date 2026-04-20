@@ -15,10 +15,6 @@ from backend.copilot.model import (
 )
 from backend.data.redis_client import get_redis_async
 
-@pytest.mark.asyncio
-async def test_batch_insert_preserves_explicit_message_id():
-    """Verify batch insertion preserves an explicit message ID."""
-
 @pytest.mark.asyncio(loop_scope="session")
 async def test_batch_insert_preserves_explicit_message_id(
     setup_test_user, test_user_id
