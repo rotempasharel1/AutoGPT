@@ -918,23 +918,10 @@ async def _do_transient_backoff(
     backoff: int,
     state: _RetryState,
 ) -> AsyncIterator[StreamStatus]:
-    """Emit a retry notification, sleep, and reset the SDK adapter.
-
-    Yields a single :class:`StreamStatus` so the caller can forward it to
-    the client, then sleeps for *backoff* seconds and resets ``state.usage``
-    so the next attempt starts clean.
-
-    Extracted from both exception handlers in the retry loop to remove
-    near-identical code duplication.
-    """
+    """Emit a retry notification, sleep, and reset per-attempt usage."""
     yield StreamStatus(message=f"Connection interrupted, retrying in {backoff}s…")
     await asyncio.sleep(backoff)
-  state.adapter = SDKResponseAdapter(
-      message_id=message_id,
-      session_id=session_id,
-      render_reasoning_in_ui=config.render_reasoning_in_ui,
-  )
-  state.usage.reset()
+    state.usage.reset()
 
 
 def _is_fallback_stderr(line: str) -> bool:
@@ -3713,23 +3700,17 @@ async def stream_chat_completion_sdk(
                     session_msg_ceiling=_pre_drain_msg_count,
                     target_tokens=state.target_tokens,
                 )
+
                 if attachments.hint:
                     state.query_message = f"{state.query_message}\n\n{attachments.hint}"
-                    # warm_ctx is already baked into current_message via
-                    # inject_user_context -- no separate injection needed.
-                    # Re-inject per-turn builder context so retries carry the
-                    # same live graph snapshot + guide as the initial attempt.
-                    state.query_message = await _maybe_prepend_builder_context(
-                        session, user_id, is_user_message, state.query_message
-                    )
-                    state.adapter = SDKResponseAdapter(
-                        message_id=message_id,
-                        session_id=session_id,
-                        render_reasoning_in_ui=config.render_reasoning_in_ui,
-                    )
-                    # Reset token accumulators so a failed attempt's partial
-                    # usage is not double-counted in the successful attempt.
-                    state.usage.reset()
+
+                # Re-inject builder context on retries
+                state.query_message = await _maybe_prepend_builder_context(
+                    session, user_id, is_user_message, state.query_message
+                )
+
+                # Reset usage between retries
+                state.usage.reset()
 
             pre_attempt_msg_count = len(session.messages)
             # Snapshot transcript builder state — it maintains an
