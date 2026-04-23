@@ -2317,7 +2317,7 @@ async def _run_stream_attempt(
             # Subsequent StreamTextDelta dispatches accumulate content into
             # acc.assistant_response in-place (ChatMessage is mutable), so
             # the DB record is updated without a second append.
-                # acc.has_appended_assistant stays True — placeholder is live
+            # acc.has_appended_assistant stays True — placeholder is live
 
             # When StreamFinish is in this batch (ResultMessage), flush any
             # text buffered by the thinking stripper and inject it as a
