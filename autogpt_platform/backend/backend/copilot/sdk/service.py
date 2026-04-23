@@ -924,6 +924,21 @@ async def _do_transient_backoff(
     state.usage.reset()
 
 
+def _reset_retry_attempt_state(
+    stream_ctx: _StreamContext,
+    current_message_id: str,
+    session_id: str,
+    state: _RetryState,
+) -> _StreamContext:
+    """Prepare per-attempt state for a fresh retry attempt."""
+    stream_ctx = replace(stream_ctx, message_id=current_message_id)
+    state.adapter = SDKResponseAdapter(
+        message_id=current_message_id,
+        session_id=session_id,
+    )
+    return stream_ctx
+
+
 def _is_fallback_stderr(line: str) -> bool:
     """Return True if a CLI stderr line signals fallback-model activation.
 
@@ -3607,10 +3622,11 @@ async def stream_chat_completion_sdk(
         _last_reset_attempt = -1
         current_message_id = message_id
         while attempt < _MAX_STREAM_ATTEMPTS:
-            stream_ctx = replace(stream_ctx, message_id=current_message_id)
-            state.adapter = SDKResponseAdapter(
-                message_id=current_message_id,
-                session_id=session_id,
+            stream_ctx = _reset_retry_attempt_state(
+                stream_ctx,
+                current_message_id,
+                session_id,
+                state,
             )
 
             # Reset transient retry counter per context-level attempt so
