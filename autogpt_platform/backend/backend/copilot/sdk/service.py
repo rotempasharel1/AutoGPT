@@ -441,7 +441,9 @@ _SEED_TARGET_TOKENS: int = 30_000
 # Headroom kept below the CLI autocompact trigger so a compaction retry
 # does not immediately trigger another compaction on the next assistant turn.
 _COMPACTION_HEADROOM_TOKENS: int = 20_000
-
+def _resolve_env_model(*args, **kwargs):
+    # delegate to the new logic you introduced
+    return resolve_env_model(*args, **kwargs)
 
 def _compaction_target_tokens(model: str) -> int:
     """Compaction target consistent with the CLI's autocompact threshold.
