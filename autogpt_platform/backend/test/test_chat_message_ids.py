@@ -4,7 +4,6 @@ import pytest
 
 from backend.copilot.db import add_chat_messages_batch, create_chat_session
 from backend.copilot.db import get_chat_session as get_db_chat_session
-
 from backend.copilot.model import (
     ChatMessage,
     ChatSession,
@@ -12,6 +11,7 @@ from backend.copilot.model import (
     upsert_chat_session,
 )
 from backend.data.redis_client import get_redis_async
+
 
 @pytest.mark.asyncio(loop_scope="session")
 
