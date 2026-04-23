@@ -939,6 +939,96 @@ def _reset_retry_attempt_state(
     return stream_ctx
 
 
+
+async def _prepare_retry_attempt(
+    attempt: int,
+    log_prefix: str,
+    transcript_content: str,
+    tried_compaction: bool,
+    session_id: str,
+    sdk_cwd: str,
+    state: _RetryState,
+    current_message: str,
+    session: ChatSession,
+    transcript_msg_count: int,
+    _pre_drain_msg_count: int,
+    attachments: PreparedAttachments,
+    user_id: str | None,
+    is_user_message: bool,
+    sdk_options_kwargs: dict[str, Any],
+    system_prompt: str,
+    *,
+    cross_user_cache: bool,
+) -> tuple[_RetryState, bool, bool]:
+    """Prepare reduced context, options, and query state for a retry attempt."""
+    logger.info(
+        "%s Retrying with reduced context (%d/%d)",
+        log_prefix,
+        attempt + 1,
+        _MAX_STREAM_ATTEMPTS,
+    )
+
+    reduced = await _reduce_context(
+        transcript_content,
+        tried_compaction,
+        session_id,
+        sdk_cwd,
+        log_prefix,
+        attempt=attempt,
+    )
+    state.transcript_builder = reduced.builder
+    state.use_resume = reduced.use_resume
+    state.resume_file = reduced.resume_file
+    state.transcript_msg_count = 0
+    state.target_tokens = reduced.target_tokens
+
+    # Rebuild SDK options and query for the reduced context
+    sdk_options_kwargs_retry = dict(sdk_options_kwargs)
+    if reduced.use_resume and reduced.resume_file:
+        sdk_options_kwargs_retry["resume"] = reduced.resume_file
+        sdk_options_kwargs_retry.pop("session_id", None)
+    elif "session_id" in sdk_options_kwargs:
+        # Initial invocation used session_id (T1 or mode-switch T1): keep it so the
+        # CLI writes the session file to the predictable path for upload_transcript().
+        sdk_options_kwargs_retry.pop("resume", None)
+        sdk_options_kwargs_retry["session_id"] = session_id
+    else:
+        # T2+ retry without --resume: initial invocation used --resume, which
+        # restored the T1 session file to local storage. Re-using session_id
+        # without --resume would fail with "Session ID already in use".
+        sdk_options_kwargs_retry.pop("resume", None)
+        sdk_options_kwargs_retry.pop("session_id", None)
+
+    # Recompute system_prompt for retry.
+    sdk_options_kwargs_retry["system_prompt"] = _build_system_prompt_value(
+        system_prompt,
+        cross_user_cache=cross_user_cache,
+    )
+    state.options = ClaudeAgentOptions(**sdk_options_kwargs_retry)  # type: ignore[arg-type]
+
+    # Retry intentionally omits prior_messages (transcript+gap context) and falls
+    # back to full session.messages[:-1] from DB — the authoritative source.
+    state.query_message, state.was_compacted = await _build_query_message(
+        current_message,
+        session,
+        state.use_resume,
+        state.transcript_msg_count,
+        session_id,
+        session_msg_ceiling=_pre_drain_msg_count,
+        target_tokens=state.target_tokens,
+    )
+    if attachments.hint:
+        state.query_message = f"{state.query_message}\n\n{attachments.hint}"
+
+    # Re-inject builder context on retries
+    state.query_message = await _maybe_prepend_builder_context(
+        session, user_id, is_user_message, state.query_message
+    )
+
+    # Reset usage between retries
+    state.usage.reset()
+    return state, reduced.transcript_lost, reduced.tried_compaction
+
 def _is_fallback_stderr(line: str) -> bool:
     """Return True if a CLI stderr line signals fallback-model activation.
 
@@ -3650,83 +3740,28 @@ async def stream_chat_completion_sdk(
             # (rolled-back) attempt don't carry over to the fresh attempt.
             reset_tool_failure_counters()
             if attempt > 0:
-                logger.info(
-                    "%s Retrying with reduced context (%d/%d)",
-                    log_prefix,
-                    attempt + 1,
-                    _MAX_STREAM_ATTEMPTS,
-                )
                 yield StreamStatus(message="Optimizing conversation context\u2026")
-
-                ctx = await _reduce_context(
-                    transcript_content,
-                    tried_compaction,
-                    session_id,
-                    sdk_cwd,
-                    log_prefix,
+                state, transcript_lost, tried_compaction = await _prepare_retry_attempt(
                     attempt=attempt,
-                )
-                state.transcript_builder = ctx.builder
-                state.use_resume = ctx.use_resume
-                state.resume_file = ctx.resume_file
-                tried_compaction = ctx.tried_compaction
-                state.transcript_msg_count = 0
-                state.target_tokens = ctx.target_tokens
-                if ctx.transcript_lost:
-                    skip_transcript_upload = True
-
-                # Rebuild SDK options and query for the reduced context
-                sdk_options_kwargs_retry = dict(sdk_options_kwargs)
-                if ctx.use_resume and ctx.resume_file:
-                    sdk_options_kwargs_retry["resume"] = ctx.resume_file
-                    sdk_options_kwargs_retry.pop("session_id", None)
-                elif "session_id" in sdk_options_kwargs:
-                    # Initial invocation used session_id (T1 or mode-switch
-                    # T1): keep it so the CLI writes the session file to the
-                    # predictable path for upload_transcript().  Storage is
-                    # ephemeral per invocation, so no "Session ID already in
-                    # use" conflict occurs — no prior file was restored.
-                    sdk_options_kwargs_retry.pop("resume", None)
-                    sdk_options_kwargs_retry["session_id"] = session_id
-                else:
-                    # T2+ retry without --resume: initial invocation used
-                    # --resume, which restored the T1 session file to local
-                    # storage.  Re-using session_id without --resume would
-                    # fail with "Session ID already in use".
-                    sdk_options_kwargs_retry.pop("resume", None)
-                    sdk_options_kwargs_retry.pop("session_id", None)
-                # Recompute system_prompt for retry — the preset is safe on
-                # every turn (requires CLI ≥ 2.1.98, installed in the Docker
-                # image and configured via CHAT_CLAUDE_AGENT_CLI_PATH).
-                sdk_options_kwargs_retry["system_prompt"] = _build_system_prompt_value(
-                    system_prompt,
+                    log_prefix=log_prefix,
+                    transcript_content=transcript_content,
+                    tried_compaction=tried_compaction,
+                    session_id=session_id,
+                    sdk_cwd=sdk_cwd,
+                    state=state,
+                    current_message=current_message,
+                    session=session,
+                    transcript_msg_count=transcript_msg_count,
+                    _pre_drain_msg_count=_pre_drain_msg_count,
+                    attachments=attachments,
+                    user_id=user_id,
+                    is_user_message=is_user_message,
+                    sdk_options_kwargs=sdk_options_kwargs,
+                    system_prompt=system_prompt,
                     cross_user_cache=config.claude_agent_cross_user_prompt_cache,
                 )
-                state.options = ClaudeAgentOptions(**sdk_options_kwargs_retry)  # type: ignore[arg-type]  # dynamic kwargs
-                # Retry intentionally omits prior_messages (transcript+gap context) and
-                # falls back to full session.messages[:-1] from DB — the authoritative
-                # source.  transcript+gap is an optimisation for the first attempt only;
-                # on retry the extra overhead of full-DB context is acceptable.
-                state.query_message, state.was_compacted = await _build_query_message(
-                    current_message,
-                    session,
-                    state.use_resume,
-                    state.transcript_msg_count,
-                    session_id,
-                    session_msg_ceiling=_pre_drain_msg_count,
-                    target_tokens=state.target_tokens,
-                )
-
-                if attachments.hint:
-                    state.query_message = f"{state.query_message}\n\n{attachments.hint}"
-
-                # Re-inject builder context on retries
-                state.query_message = await _maybe_prepend_builder_context(
-                    session, user_id, is_user_message, state.query_message
-                )
-
-                # Reset usage between retries
-                state.usage.reset()
+                if transcript_lost:
+                    skip_transcript_upload = True
 
             pre_attempt_msg_count = len(session.messages)
             # Snapshot transcript builder state — it maintains an
