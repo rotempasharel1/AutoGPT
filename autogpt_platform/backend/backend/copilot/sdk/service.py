@@ -515,7 +515,7 @@ async def _reduce_context(
             model=config.thinking_standard_model,
             log_prefix=log_prefix,
             target_tokens=_compaction_target_tokens(target_model),
-;       )
+       )
         if (
             compacted
             and compacted != transcript_content
