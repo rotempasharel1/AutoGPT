@@ -443,11 +443,13 @@ _SEED_TARGET_TOKENS: int = 30_000
 _COMPACTION_HEADROOM_TOKENS: int = 20_000
 
 
+
 def _resolve_env_model(sdk_model: str | None, fallback_model: str | None) -> str | None:
     """Pick the model that drives build_sdk_env's model-aware gates."""
     if fallback_model and _is_moonshot_model(fallback_model):
         return fallback_model
     return sdk_model
+
 
 def _compaction_target_tokens(model: str) -> int:
     """Compaction target consistent with the CLI's autocompact threshold.
