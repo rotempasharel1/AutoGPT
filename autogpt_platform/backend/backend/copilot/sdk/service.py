@@ -441,6 +441,8 @@ _SEED_TARGET_TOKENS: int = 30_000
 # Headroom kept below the CLI autocompact trigger so a compaction retry
 # does not immediately trigger another compaction on the next assistant turn.
 _COMPACTION_HEADROOM_TOKENS: int = 20_000
+
+
 def _resolve_env_model(sdk_model: str | None, fallback_model: str | None) -> str | None:
     """Pick the model that drives build_sdk_env's model-aware gates."""
     if fallback_model and _is_moonshot_model(fallback_model):
@@ -509,13 +511,13 @@ async def _reduce_context(
     # useful for the eventual upload_transcript call that seeds future turns.
     if transcript_content and not tried_compaction:
         target_model = runtime_model or config.thinking_standard_model
-        
+
         compacted = await compact_transcript(
             transcript_content,
             model=config.thinking_standard_model,
             log_prefix=log_prefix,
             target_tokens=_compaction_target_tokens(target_model),
-       )
+        )
         if (
             compacted
             and compacted != transcript_content
