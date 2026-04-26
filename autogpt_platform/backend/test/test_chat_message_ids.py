@@ -73,3 +73,36 @@ async def test_upsert_chat_session_persists_message_ids_and_duration(
         assistant_message_id,
     ]
     assert loaded.messages[1].duration_ms == 1234
+
+
+def test_chat_message_model_keeps_id() -> None:
+    message_id = str(uuid4())
+
+    msg = ChatMessage(
+        id=message_id,
+        role="assistant",
+        content="hello",
+    )
+
+    assert msg.id == message_id
+    assert msg.role == "assistant"
+    assert msg.content == "hello"
+
+
+def test_session_message_payload_can_include_id() -> None:
+    message_id = str(uuid4())
+
+    session = ChatSession.new(
+        user_id="test-user",
+        dry_run=False,
+        builder_graph_id=None,
+    )
+    session.messages.append(
+        ChatMessage(
+            id=message_id,
+            role="assistant",
+            content="hello",
+        )
+    )
+
+    assert session.messages[0].id == message_id

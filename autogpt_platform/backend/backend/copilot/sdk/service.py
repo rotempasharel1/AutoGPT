@@ -966,15 +966,16 @@ async def _do_transient_backoff(
 
 def _reset_retry_attempt_state(
     stream_ctx: _StreamContext,
-    current_message_id: str,
+    message_id: str,
     session_id: str,
     state: _RetryState,
 ) -> _StreamContext:
     """Prepare per-attempt state for a fresh retry attempt."""
-    stream_ctx = replace(stream_ctx, message_id=current_message_id)
+    stream_ctx = replace(stream_ctx, message_id=message_id)
     state.adapter = SDKResponseAdapter(
-        message_id=current_message_id,
+        message_id=message_id,
         session_id=session_id,
+        render_reasoning_in_ui=config.render_reasoning_in_ui,
     )
     return stream_ctx
 
@@ -3750,11 +3751,10 @@ async def stream_chat_completion_sdk(
         )
         attempt = 0
         _last_reset_attempt = -1
-        current_message_id = message_id
         while attempt < _MAX_STREAM_ATTEMPTS:
             stream_ctx = _reset_retry_attempt_state(
                 stream_ctx,
-                current_message_id,
+                message_id,
                 session_id,
                 state,
             )
@@ -3865,7 +3865,6 @@ async def stream_chat_completion_sdk(
                         )
                         async for evt in _do_transient_backoff(backoff, state):
                             yield evt
-                        current_message_id = str(uuid.uuid4())
                         continue  # retry the same context-level attempt
                 logger.warning(
                     "%s Stream error handled in attempt "
@@ -3948,7 +3947,6 @@ async def stream_chat_completion_sdk(
                         )
                         async for evt in _do_transient_backoff(backoff, state):
                             yield evt
-                        current_message_id = str(uuid.uuid4())
                         continue  # retry same context-level attempt
                     # Retries exhausted — persist retryable marker so the
                     # frontend shows "Try again" after refresh.
@@ -3969,7 +3967,6 @@ async def stream_chat_completion_sdk(
                     ended_with_stream_error = True
                     break
                 attempt += 1  # advance to next context-level attempt
-                current_message_id = str(uuid.uuid4())
                 continue
         else:
             # while condition became False — all attempts exhausted without
