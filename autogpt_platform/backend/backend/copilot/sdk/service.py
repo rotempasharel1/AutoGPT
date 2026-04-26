@@ -484,7 +484,6 @@ async def _reduce_context(
     attempt: int = 1,
     runtime_model: str | None = None,
 ) -> ReducedContext:
-    effective_model = runtime_model or config.agent_model
     """Prepare reduced context for a retry attempt.
 
     On the first retry, compacts the transcript via LLM summarization.
